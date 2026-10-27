@@ -1,0 +1,199 @@
+{
+	"app": {
+		"title": "TGS Converter",
+		"badgeLocal": "100% Local",
+		"badgeLocalTooltip": "All conversion happens locally in your browser. No files are uploaded to any server.",
+		"githubTooltip": "GitHub Source",
+		"language": "Language",
+		"hero": {
+			"heading": "Bring TGS Animations Anywhere",
+			"description": "Convert Telegram .tgs animated stickers to WebP, GIF, or APNG locally in your browser."
+		},
+		"step1": {
+			"title": "Add Files"
+		},
+		"step2": {
+			"title": "Output Format"
+		},
+		"footer": {
+			"privacy": "Local offline processing · No data uploaded",
+			"sourceCode": "GitHub Source"
+		}
+	},
+	"upload": {
+		"dropPrompt": "Drop TGS or ZIP files here",
+		"dropSub": "Click to browse, or paste with Ctrl+V · Single file ≤ 10MB, ZIP ≤ 100MB",
+		"ariaLabel": "Drop TGS or ZIP files here to upload",
+		"loadedCount": "{count} sticker(s) loaded",
+		"totalSize": "Total {size}",
+		"btnReselect": "Reselect"
+	},
+	"telegram": {
+		"tabUpload": "Local Files",
+		"tabBot": "Bot API Fetch",
+		"proxyLabel": "API Reverse Proxy URL",
+		"proxyPlaceholder": "e.g. https://tg.yourdomain.com or Cloudflare Worker URL",
+		"proxyHelp": "Bypasses browser CORS restrictions and network blocks",
+		"tokenLabel": "Bot Token",
+		"tokenPlaceholder": "e.g. 123456789:ABCdefGhI...",
+		"tokenHelp": "Obtain via @BotFather in Telegram",
+		"tokenHelpLink": "Get Token",
+		"tokenSecurityTip": "Your token and requests communicate only with Telegram's official API via your specified proxy. Nothing passes through our site or third parties.",
+		"rememberToken": "Remember configuration (saved locally)",
+		"clearToken": "Clear saved configuration",
+		"showToken": "Show Token",
+		"hideToken": "Hide Token",
+		"showProxy": "Show Proxy URL",
+		"hideProxy": "Hide Proxy URL",
+		"setLabel": "Sticker Set Link or Shortname",
+		"setPlaceholder": "e.g. HotCherry or t.me/addstickers/HotCherry",
+		"btnFetch": "Fetch Stickers",
+		"btnFetching": "Fetching stickers...",
+		"invalidToken": "Invalid Bot Token format (expected format: 123456:ABC-DEF...)",
+		"emptyProxy": "Please enter an API reverse proxy URL",
+		"invalidProxy": "Proxy URL must start with http:// or https://",
+		"emptySetName": "Please enter a sticker set link or name",
+		"emptyToken": "Please enter a Bot Token",
+		"loadedCount": "{count} sticker(s) loaded",
+		"totalSize": "Total {size}",
+		"btnRefetch": "Refetch"
+	},
+	"conversion": {
+		"formatLabel": "Output Format",
+		"formats": {
+			"webp": {
+				"label": "WebP",
+				"desc": "Small size, high quality (Recommended)"
+			},
+			"gif": {
+				"label": "GIF",
+				"desc": "Maximum compatibility, direct chat sharing"
+			},
+			"apng": {
+				"label": "APNG",
+				"desc": "Lossless quality with full alpha transparency"
+			}
+		},
+		"errorTitle": "Conversion Failed",
+		"phases": {
+			"complete": "Conversion Complete",
+			"extracting": "Parsing...",
+			"rendering": "Rendering...",
+			"encoding": "Encoding...",
+			"packaging": "Packaging..."
+		},
+		"status": {
+			"queued": "Queued",
+			"parsing": "Parsing",
+			"rendering": "Rendering",
+			"encoding": "Encoding",
+			"done": "Done",
+			"error": "Failed",
+			"cancelled": "Cancelled"
+		},
+		"queue": {
+			"title": "File List",
+			"count": "{count} items",
+			"progress": "Completed",
+			"threads": "{count} threads",
+			"threadsTooltip": "Using {count} background Worker threads for parallel encoding",
+			"listAriaLabel": "Conversion file list"
+		},
+		"actions": {
+			"start": "Start Conversion",
+			"cancel": "Cancel",
+			"resetAria": "Reset",
+			"resetTooltip": "Clear all",
+			"timeTooltip": "Elapsed time"
+		}
+	},
+	"results": {
+		"title": "Results",
+		"countBadge": "{count} items",
+		"bgModes": {
+			"dark": "Dark",
+			"light": "Light",
+			"black": "Black",
+			"white": "White"
+		},
+		"empty": {
+			"idleTitle": "No Results Yet",
+			"idleDesc": "Add stickers on the left and click 'Start Conversion'",
+			"readyTitle": "{count} file(s) ready",
+			"readyDesc": "Click 'Start Conversion' on the left to begin",
+			"runningTitle": "Converting..."
+		},
+		"completed": {
+			"heading": "Animations are ready",
+			"summary": "{count} sticker(s) · {time}",
+			"searchPlaceholder": "Search filename...",
+			"noMatch": "No matching files found",
+			"btnDownloadAll": "Download All ZIP · {size}",
+			"preparingArchive": "Preparing ZIP archive...",
+			"previewAlt": "{name} animation preview",
+			"frames": "{count} frames",
+			"btnDownload": "Download {name}",
+			"btnCopy": "Copy Image",
+			"btnCopied": "Copied!",
+			"copyFailed": "Copy failed",
+			"playAll": "Play All",
+			"pauseAll": "Pause All",
+			"playHint": "Hover or click to play animation",
+			"playing": "Playing",
+			"paused": "Static Preview"
+		}
+	},
+	"messages": {
+		"waitingForFile": "Waiting for file selection",
+		"readingFile": "Reading and inspecting file",
+		"preparedCount": "{count} TGS file(s) prepared",
+		"fetchingStickerSet": "Fetching sticker pack info...",
+		"downloadingSticker": "Downloading sticker ({current}/{total})...",
+		"parsingTgs": "Parsing TGS",
+		"renderingFrame": "Rendering frame {current}/{total}",
+		"compressing": "Compressing animation",
+		"encoding": "Encoding animation",
+		"fileCompleted": "File conversion completed",
+		"convertError": "Conversion error",
+		"processError": "Processing error",
+		"userCancelled": "User cancelled",
+		"cancelled": "Conversion cancelled",
+		"outputLimitReached": "Output limit of 512MiB reached, skipped",
+		"generatingZip": "Generating result ZIP",
+		"completedCount": "Completed {completed}/{total} files",
+		"errEmptyFile": "File is empty",
+		"errInvalidFileType": "Please select a .tgs or .zip file",
+		"errTgsTooLarge": "TGS file exceeds 10MiB limit",
+		"errZipTooLarge": "ZIP file exceeds 100MiB limit",
+		"errZipCorrupted": "ZIP is corrupted, encrypted, or uses an unsupported compression method",
+		"errZipSingleTooLarge": "{path} exceeds the 10MiB single-file limit",
+		"errZipTotalTooLarge": "Total extracted TGS size exceeds 100MiB limit",
+		"errZipNoTgs": "No TGS files found in the ZIP archive",
+		"errZipGenerateFailed": "Failed to generate result ZIP",
+		"errNotValidGzip": "Not a valid TGS gzip file",
+		"errGzipCorrupt": "TGS gzip data is corrupted or cannot be decompressed",
+		"errJsonTooLarge": "Decompressed Lottie JSON exceeds 64MiB limit",
+		"errInvalidJson": "Invalid Lottie JSON inside TGS",
+		"errNotValidGzipOrJson": "Not a valid gzip TGS or Lottie JSON",
+		"errInvalidRoot": "Invalid Lottie JSON root object",
+		"errMissingFields": "Lottie JSON missing dimensions, framerate, or layer data",
+		"errInvalidDimension": "Animation dimension is invalid or exceeds 2048px",
+		"errInvalidFrameRate": "Framerate must be between 1 and 120 FPS",
+		"errInvalidFrameCount": "Frame count is invalid or exceeds 600 frames",
+		"errFrameBufferOverflow": "Raw frame buffer exceeds 256MiB limit",
+		"errOutputTotalOverflow": "Total output exceeds 512MiB limit",
+		"errProxyFailed": "Failed to connect to proxy URL. Please verify your proxy is active and configured with proper CORS headers.",
+		"errInvalidToken": "Invalid Bot Token. Please check your token.",
+		"errStickerSetNotFound": "Sticker set not found. Please check the sticker set link or name.",
+		"errTgApiFailed": "Telegram API request failed (HTTP {status})",
+		"errStickerPathFailed": "Unable to obtain sticker download path",
+		"errDownloadFailed": "Failed to download sticker file (HTTP {status})",
+		"errVideoStickersNotSupported": "Sticker set \"{name}\" contains video stickers (.webm). Only TGS animated stickers are supported.",
+		"errStaticStickersNotSupported": "Sticker set \"{name}\" contains static stickers (.webp). Only TGS animated stickers are supported.",
+		"errNoStickersInSet": "No stickers found in sticker set \"{name}\"",
+		"errSingleStickerExceedsLimit": "Sticker file exceeds the 10MiB single-file limit",
+		"errSetTotalExceedsLimit": "Total sticker pack size exceeds 100MiB limit",
+		"reportTitle": "TGS Converter Conversion Report",
+		"reportGeneratedAt": "Generated at: "
+	}
+}
