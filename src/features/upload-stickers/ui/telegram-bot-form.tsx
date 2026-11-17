@@ -64,8 +64,7 @@ export function TelegramBotForm({
 		storage.set(STORAGE_KEY_REMEMBER, String(rememberConfig))
 	}, [token, apiBaseUrl, rememberConfig])
 
-	const handleSubmit = async (event: FormEvent) => {
-		event.preventDefault()
+	const submitFetch = async () => {
 		setClientError(null)
 
 		const cleanProxy = apiBaseUrl.trim()
@@ -91,6 +90,11 @@ export function TelegramBotForm({
 		}
 
 		await onFetch(cleanToken, cleanSet, cleanProxy)
+	}
+
+	const handleSubmit = async (event: FormEvent) => {
+		event.preventDefault()
+		await submitFetch()
 	}
 
 	const isActionDisabled = disabled || loading
@@ -289,7 +293,7 @@ export function TelegramBotForm({
 				totalBytes={totalBytes}
 				disabled={isActionDisabled}
 				buttonText={t.telegram.btnRefetch}
-				onAction={() => handleSubmit({ preventDefault: () => {} } as FormEvent)}
+				onAction={submitFetch}
 				loadedCountLabel={t.telegram.loadedCount}
 				totalSizeLabel={t.telegram.totalSize}
 			/>

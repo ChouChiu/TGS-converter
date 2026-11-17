@@ -51,9 +51,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 	}
 
 	useEffect(() => {
-		if (typeof document !== "undefined") {
-			document.documentElement.lang = locale
-		}
+		document.documentElement.lang = locale
 	}, [locale])
 
 	return (
@@ -61,7 +59,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 			value={{
 				locale,
 				setLocale,
-				t: translations[locale] ?? zhCN,
+				t: translations[locale],
 			}}
 		>
 			{children}
@@ -71,12 +69,6 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 
 export function useI18n(): I18nContextValue {
 	return useContext(I18nContext)
-}
-
-export const t: Translations = zhCN
-
-export function getTranslations(locale: Locale = "zh-CN"): Translations {
-	return translations[locale] ?? zhCN
 }
 
 export function formatString(

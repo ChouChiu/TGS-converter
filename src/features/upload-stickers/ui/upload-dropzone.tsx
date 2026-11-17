@@ -8,13 +8,13 @@ import { LoadedSummaryCard } from "./loaded-summary-card"
 interface UploadDropzoneProps {
 	sources: ConversionSource[]
 	disabled: boolean
-	onFile: (file: File) => void
+	onFiles: (files: File[]) => void
 }
 
 export function UploadDropzone({
 	sources,
 	disabled,
-	onFile,
+	onFiles,
 }: UploadDropzoneProps) {
 	const { t } = useI18n()
 	const inputRef = useRef<HTMLInputElement>(null)
@@ -24,9 +24,9 @@ export function UploadDropzone({
 		0,
 	)
 
-	const chooseFile = (files: FileList | null) => {
-		const file = files?.item(0)
-		if (file) onFile(file)
+	const chooseFiles = (fileList: FileList | null) => {
+		if (!fileList || fileList.length === 0) return
+		onFiles(Array.from(fileList))
 	}
 
 	useEffect(() => {
@@ -41,20 +41,21 @@ export function UploadDropzone({
 			}
 			const items = event.clipboardData?.items
 			if (!items) return
+			const pastedFiles: File[] = []
 			for (let i = 0; i < items.length; i += 1) {
 				const item = items[i]
 				if (item.kind === "file") {
 					const file = item.getAsFile()
-					if (file) {
-						onFile(file)
-						break
-					}
+					if (file) pastedFiles.push(file)
 				}
+			}
+			if (pastedFiles.length > 0) {
+				onFiles(pastedFiles)
 			}
 		}
 		window.addEventListener("paste", handlePaste)
 		return () => window.removeEventListener("paste", handlePaste)
-	}, [disabled, onFile])
+	}, [disabled, onFiles])
 
 	return (
 		<div className="space-y-3">
@@ -75,7 +76,7 @@ export function UploadDropzone({
 				onDrop={(event) => {
 					event.preventDefault()
 					setDragging(false)
-					if (!disabled) chooseFile(event.dataTransfer.files)
+					if (!disabled) chooseFiles(event.dataTransfer.files)
 				}}
 				aria-label={t.upload.ariaLabel}
 				className={cn(
@@ -101,10 +102,11 @@ export function UploadDropzone({
 			<input
 				ref={inputRef}
 				type="file"
+				multiple
 				accept=".tgs,.zip,application/x-tgsticker,application/zip"
 				disabled={disabled}
 				onChange={(event) => {
-					chooseFile(event.target.files)
+					chooseFiles(event.target.files)
 					event.target.value = ""
 				}}
 				className="sr-only"

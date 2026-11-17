@@ -6,7 +6,7 @@ import {
 	TelegramBotForm,
 	UploadDropzone,
 } from "@/features/upload-stickers"
-import { extractInputFile } from "@/shared/lib/archive"
+import { extractInputFiles } from "@/shared/lib/archive"
 import { I18nProvider, LOCALES, type Locale, useI18n } from "@/shared/lib/i18n"
 import { BotIcon } from "@/shared/ui/animate-ui/icons/bot"
 import { GlobeIcon } from "@/shared/ui/animate-ui/icons/globe"
@@ -34,8 +34,11 @@ function AppContent() {
 		setLocale(next)
 	}
 
-	const handleFile = (file: File) => {
-		converter.loadSources(() => extractInputFile(file), t.messages.readingFile)
+	const handleFiles = (files: File[]) => {
+		converter.loadSources(
+			() => extractInputFiles(files),
+			t.messages.readingFile,
+		)
 	}
 
 	const handleTelegramFetch = (
@@ -151,7 +154,7 @@ function AppContent() {
 				{/* Two-Column Split Workspace */}
 				<main className="relative z-10 grid min-h-[calc(100svh-3.5rem)] w-full grid-cols-1 lg:grid-cols-[400px_1fr] xl:grid-cols-[440px_1fr]">
 					{/* Left Configuration Column */}
-					<aside className="border-b border-border/70 bg-card/30 p-5 lg:border-r lg:border-b-0 lg:p-6 backdrop-blur-xs">
+					<aside className="border-b border-border/70 bg-card/30 p-5 lg:sticky lg:top-14 lg:h-[calc(100svh-3.5rem)] lg:overflow-y-auto lg:border-r lg:border-b-0 lg:p-6 backdrop-blur-xs">
 						<div className="space-y-5">
 							{/* Panel Header */}
 							<div className="space-y-1">
@@ -192,7 +195,7 @@ function AppContent() {
 										<UploadDropzone
 											sources={converter.sources}
 											disabled={converter.running || converter.loadingInput}
-											onFile={handleFile}
+											onFiles={handleFiles}
 										/>
 									</TabsContent>
 									<TabsContent value="bot" className="pt-2">

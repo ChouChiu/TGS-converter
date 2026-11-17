@@ -1,3 +1,4 @@
+import { createAbortError } from "@/shared/lib/utils"
 import type {
 	EncoderRequest,
 	EncoderResponse,
@@ -79,7 +80,7 @@ export function createEncoderClient(
 
 	function acquireWorker(): Promise<Worker> {
 		if (destroyed || signal.aborted) {
-			return Promise.reject(new DOMException("转换已取消", "AbortError"))
+			return Promise.reject(createAbortError())
 		}
 		const idle = idleWorkers.pop()
 		if (idle) {
@@ -89,14 +90,14 @@ export function createEncoderClient(
 			const onAbort = () => {
 				const idx = waitQueue.indexOf(assign)
 				if (idx !== -1) waitQueue.splice(idx, 1)
-				reject(new DOMException("转换已取消", "AbortError"))
+				reject(createAbortError())
 			}
 
 			const assign = (worker: Worker) => {
 				signal.removeEventListener("abort", onAbort)
 				if (destroyed || signal.aborted) {
 					returnWorker(worker)
-					reject(new DOMException("转换已取消", "AbortError"))
+					reject(createAbortError())
 				} else {
 					resolve(worker)
 				}
@@ -113,7 +114,7 @@ export function createEncoderClient(
 		signal.removeEventListener("abort", destroy)
 
 		for (const session of activeSessions) {
-			session.reject(new DOMException("转换已取消", "AbortError"))
+			session.reject(createAbortError())
 			session.worker.terminate()
 		}
 		activeSessions.clear()
@@ -139,91 +140,87 @@ export function createEncoderClient(
 		nextSessionId += 1
 		let sessionActive = true
 
-		return new Promise<EncoderSession>((resolveSession) => {
-			let resultResolve!: (bytes: Uint8Array) => void
-			let resultReject!: (err: Error) => void
-			const resultPromise = new Promise<Uint8Array>((res, rej) => {
-				resultResolve = res
-				resultReject = rej
-			})
-			resultPromise.catch(() => {})
+		let resultResolve!: (bytes: Uint8Array) => void
+		let resultReject!: (err: Error) => void
+		const resultPromise = new Promise<Uint8Array>((res, rej) => {
+			resultResolve = res
+			resultReject = rej
+		})
+		resultPromise.catch(() => {})
 
-			const sessionEntry = { worker, reject: resultReject }
-			activeSessions.add(sessionEntry)
+		const sessionEntry = { worker, reject: resultReject }
+		activeSessions.add(sessionEntry)
 
-			const cleanup = () => {
-				sessionActive = false
-				activeSessions.delete(sessionEntry)
+		const cleanup = () => {
+			sessionActive = false
+			activeSessions.delete(sessionEntry)
+		}
+
+		worker.onerror = (event) => {
+			if (!sessionActive) return
+			cleanup()
+			resultReject(new Error(event.message || "编码 Worker 运行失败"))
+			returnWorker(worker, false)
+		}
+
+		worker.onmessage = (event: MessageEvent<EncoderResponse>) => {
+			const message = event.data
+			if (message.id !== sessionId) return
+
+			if (message.type === "progress") {
+				onProgress(message.progress)
+			} else if (message.type === "error") {
+				cleanup()
+				resultReject(new Error(message.message))
+				returnWorker(worker, true)
+			} else if (message.type === "result") {
+				cleanup()
+				resultResolve(new Uint8Array(message.buffer))
+				returnWorker(worker, true)
 			}
+		}
 
-			worker.onerror = (event) => {
+		worker.postMessage({
+			type: "init",
+			id: sessionId,
+			format,
+			width,
+			height,
+			frameCount,
+		} satisfies EncoderRequest)
+
+		return {
+			addFrame(index, duration, buffer) {
+				if (!sessionActive || signal.aborted) {
+					throw createAbortError()
+				}
+				worker.postMessage(
+					{
+						type: "frame",
+						id: sessionId,
+						index,
+						duration,
+						buffer,
+					} satisfies EncoderRequest,
+					[buffer],
+				)
+			},
+			async finish() {
+				if (!sessionActive || signal.aborted) {
+					throw createAbortError()
+				}
+				worker.postMessage({
+					type: "finish",
+					id: sessionId,
+				} satisfies EncoderRequest)
+				return resultPromise
+			},
+			destroy() {
 				if (!sessionActive) return
 				cleanup()
-				resultReject(new Error(event.message || "编码 Worker 运行失败"))
 				returnWorker(worker, false)
-			}
-
-			worker.onmessage = (event: MessageEvent<EncoderResponse>) => {
-				const message = event.data
-				if (message.id !== sessionId) return
-
-				if (message.type === "progress") {
-					onProgress(message.progress)
-				} else if (message.type === "error") {
-					cleanup()
-					resultReject(new Error(message.message))
-					returnWorker(worker, true)
-				} else if (message.type === "result") {
-					cleanup()
-					resultResolve(new Uint8Array(message.buffer))
-					returnWorker(worker, true)
-				}
-			}
-
-			worker.postMessage({
-				type: "init",
-				id: sessionId,
-				format,
-				width,
-				height,
-				frameCount,
-			} satisfies EncoderRequest)
-
-			const session: EncoderSession = {
-				addFrame(index, duration, buffer) {
-					if (!sessionActive || signal.aborted || destroyed) {
-						throw new DOMException("转换已取消", "AbortError")
-					}
-					worker.postMessage(
-						{
-							type: "frame",
-							id: sessionId,
-							index,
-							duration,
-							buffer,
-						} satisfies EncoderRequest,
-						[buffer],
-					)
-				},
-				async finish() {
-					if (!sessionActive || signal.aborted || destroyed) {
-						throw new DOMException("转换已取消", "AbortError")
-					}
-					worker.postMessage({
-						type: "finish",
-						id: sessionId,
-					} satisfies EncoderRequest)
-					return resultPromise
-				},
-				destroy() {
-					if (!sessionActive) return
-					cleanup()
-					returnWorker(worker, false)
-				},
-			}
-
-			resolveSession(session)
-		})
+			},
+		}
 	}
 
 	return {

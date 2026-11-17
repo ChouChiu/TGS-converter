@@ -68,6 +68,10 @@ export function ConversionPanel(props: ConversionPanelProps) {
 		props.items.length > 0 && !props.running && !props.loadingInput
 	const isComplete =
 		props.progress.phase === "complete" && props.results.length > 0
+	const doneCount = props.items.filter((item) => item.status === "done").length
+	const failedCount = props.items.filter(
+		(item) => item.status === "error",
+	).length
 
 	const currentPhaseIcon = () => {
 		if (isComplete)
@@ -239,9 +243,16 @@ export function ConversionPanel(props: ConversionPanelProps) {
 									})}
 								</Badge>
 							)}
-							<span className="font-mono text-[10px] text-muted-foreground">
-								{props.items.filter((item) => item.status === "done").length}/
-								{props.items.length}
+							{failedCount > 0 && (
+								<Badge
+									variant="outline"
+									className="h-4 px-1 text-[9px] font-mono text-rose-400 border-rose-500/30"
+								>
+									{failedCount} {t.conversion.status.error}
+								</Badge>
+							)}
+							<span className="font-mono text-[10px] text-muted-foreground tabular-nums">
+								{doneCount}/{props.items.length}
 							</span>
 						</div>
 					</div>
@@ -258,22 +269,33 @@ export function ConversionPanel(props: ConversionPanelProps) {
 								return (
 									<li
 										key={item.id}
-										className="flex items-center justify-between gap-2 px-3 py-1.5 text-xs"
+										className="px-3 py-1.5 text-xs"
+										title={item.error}
 									>
-										<div className="flex min-w-0 items-center gap-2">
-											<span className="w-5 font-mono text-[10px] text-muted-foreground">
-												{index + 1}
-											</span>
-											<span className="truncate text-foreground">
-												{item.name}
-											</span>
+										<div className="flex items-center justify-between gap-2">
+											<div className="flex min-w-0 items-center gap-2">
+												<span className="w-5 shrink-0 font-mono text-[10px] text-muted-foreground tabular-nums">
+													{index + 1}
+												</span>
+												<span className="truncate text-foreground">
+													{item.name}
+												</span>
+											</div>
+											<Badge
+												variant="outline"
+												className={cn(
+													"h-4 shrink-0 px-1 text-[9px]",
+													statusClass,
+												)}
+											>
+												{statusLabel}
+											</Badge>
 										</div>
-										<Badge
-											variant="outline"
-											className={cn("h-4 px-1 text-[9px]", statusClass)}
-										>
-											{statusLabel}
-										</Badge>
+										{item.status === "error" && item.error && (
+											<p className="mt-0.5 pl-7 truncate text-[10px] text-rose-400/90">
+												{item.error}
+											</p>
+										)}
 									</li>
 								)
 							})}

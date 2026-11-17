@@ -1,6 +1,10 @@
 import { unzip, zip } from "fflate"
 import { LIMITS } from "@/shared/config/limits"
-import { basename, sanitizeArchivePath } from "@/shared/lib/files"
+import {
+	basename,
+	makeUniquePath,
+	sanitizeArchivePath,
+} from "@/shared/lib/files"
 import type { ConversionResult, ConversionSource } from "@/shared/model/types"
 
 const NATURAL_PATH_COLLATOR = new Intl.Collator("zh-CN", {
@@ -89,6 +93,42 @@ export async function extractInputFile(
 			},
 		)
 	})
+}
+
+export async function extractInputFiles(
+	files: File[],
+): Promise<ConversionSource[]> {
+	if (files.length === 0) {
+		throw new Error("请选择 .tgs 或 .zip 文件")
+	}
+	if (files.length === 1) {
+		return extractInputFile(files[0])
+	}
+
+	const usedPaths = new Set<string>()
+	const combined: ConversionSource[] = []
+	let totalBytes = 0
+
+	for (const file of files) {
+		const extracted = await extractInputFile(file)
+		for (const source of extracted) {
+			totalBytes += source.bytes.byteLength
+			if (totalBytes > LIMITS.maxExtractedBytes) {
+				throw new Error("所选文件的 TGS 总量超过 100MiB")
+			}
+			const uniquePath = makeUniquePath(source.path, usedPaths)
+			combined.push({
+				...source,
+				path: uniquePath,
+				name: basename(uniquePath),
+			})
+		}
+	}
+
+	combined.sort((left, right) =>
+		NATURAL_PATH_COLLATOR.compare(left.path, right.path),
+	)
+	return combined
 }
 
 export function createResultArchive(

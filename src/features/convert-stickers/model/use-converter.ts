@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { formatString, useI18n } from "@/shared/lib/i18n"
+import { getErrorMessage, isAbortError } from "@/shared/lib/utils"
 import type {
 	ConversionItem,
 	ConversionResult,
@@ -12,17 +13,6 @@ import {
 	runConversionPipeline,
 } from "../lib/conversion-pipeline"
 import { getRecommendedWorkerCount } from "../lib/encoder-client"
-
-function errorMessage(error: unknown): string {
-	return error instanceof Error ? error.message : "发生未知错误"
-}
-
-function isAbortError(error: unknown): boolean {
-	return (
-		(error instanceof DOMException && error.name === "AbortError") ||
-		(error instanceof Error && error.name === "AbortError")
-	)
-}
 
 export function useConverter() {
 	const { t } = useI18n()
@@ -143,7 +133,7 @@ export function useConverter() {
 				if (!isAbortError(err)) {
 					setSources([])
 					setItems([])
-					setError(errorMessage(err))
+					setError(getErrorMessage(err))
 					setProgress({
 						phase: "idle",
 						percent: 0,

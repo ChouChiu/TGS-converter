@@ -1,7 +1,11 @@
 import { gzipSync, unzipSync, zipSync } from "fflate"
 import { describe, expect, it } from "vitest"
 import type { ConversionResult } from "@/shared/model/types"
-import { createResultArchive, extractInputFile } from "./archive"
+import {
+	createResultArchive,
+	extractInputFile,
+	extractInputFiles,
+} from "./archive"
 
 const lottie = gzipSync(
 	new TextEncoder().encode(
@@ -66,6 +70,15 @@ describe("ZIP 输入", () => {
 		const sources = await extractInputFile(new File([zipped], "folders.zip"))
 		expect(sources).toHaveLength(1)
 		expect(sources[0].path).toBe("pack/real.tgs")
+	})
+
+	it("支持一次提取多个 TGS 文件并自动去重路径与自然排序", async () => {
+		const sources = await extractInputFiles([
+			new File([lottie], "10.tgs"),
+			new File([lottie], "2.tgs"),
+			new File([lottie], "2.tgs"),
+		])
+		expect(sources.map((s) => s.path)).toEqual(["2 (2).tgs", "2.tgs", "10.tgs"])
 	})
 })
 

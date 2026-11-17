@@ -8,16 +8,19 @@ import {
 } from "@/shared/lib/files"
 import { formatString, type Translations } from "@/shared/lib/i18n"
 import { parseTgs } from "@/shared/lib/tgs"
+import { getErrorMessage, isAbortError } from "@/shared/lib/utils"
 import type {
 	ConversionItem,
 	ConversionResult,
 	ConversionSource,
 	JobProgress,
 	OutputFormat,
+	ParsedTgs,
 	ProgressPhase,
 } from "@/shared/model/types"
 import {
 	createEncoderClient,
+	type EncoderSession,
 	getRecommendedWorkerCount,
 } from "./encoder-client"
 import { renderLottieFrames } from "./render-lottie"
@@ -44,17 +47,6 @@ export interface PipelineOutput {
 	archive: BatchArchive | null
 	failures: { path: string; error: string }[]
 	createdUrls: string[]
-}
-
-function errorMessage(error: unknown): string {
-	return error instanceof Error ? error.message : "发生未知错误"
-}
-
-function isAbortError(error: unknown): boolean {
-	return (
-		(error instanceof DOMException && error.name === "AbortError") ||
-		(error instanceof Error && error.name === "AbortError")
-	)
 }
 
 function createProgressReporter(
@@ -98,6 +90,34 @@ function createProgressReporter(
 	}
 }
 
+async function buildBatchArchive(
+	completed: ConversionResult[],
+	failures: { path: string; error: string }[],
+	format: OutputFormat,
+	t: Translations,
+	onProgress: (progress: JobProgress) => void,
+): Promise<BatchArchive | null> {
+	onProgress({
+		phase: "packaging",
+		percent: 97,
+		message: t.messages.generatingZip,
+	})
+	try {
+		const bytes = await createResultArchive(completed, failures)
+		const blob = new Blob([bytes as BlobPart], { type: "application/zip" })
+		const url = URL.createObjectURL(blob)
+		return {
+			name: `converted-${format}.zip`,
+			blob,
+			url,
+			size: bytes.byteLength,
+		}
+	} catch {
+		// ZIP generation failure is non-fatal to individual results
+		return null
+	}
+}
+
 export async function runConversionPipeline(
 	options: PipelineOptions,
 ): Promise<PipelineOutput> {
@@ -128,6 +148,77 @@ export async function runConversionPipeline(
 	const outputPaths = sources.map((source) =>
 		makeUniquePath(outputPathFor(source.path, format), usedPaths),
 	)
+
+	const finishEncodingTask = async (
+		index: number,
+		source: ConversionSource,
+		parsed: ParsedTgs,
+		encoder: EncoderSession,
+		outputPath: string,
+		thumbnail?: string,
+	) => {
+		try {
+			const bytes = await encoder.finish()
+			outputBytes += bytes.byteLength
+			if (outputBytes > LIMITS.maxOutputBytes) {
+				outputLimitReached = true
+				throw new Error(t.messages.errOutputTotalOverflow)
+			}
+
+			const mimeType = FORMAT_META[format].mimeType
+			const blob = new Blob([bytes as BlobPart], { type: mimeType })
+			const previewUrl = URL.createObjectURL(blob)
+			createdUrls.push(previewUrl)
+
+			const res: ConversionResult = {
+				id: source.id,
+				inputPath: source.path,
+				outputPath,
+				name: basename(outputPath),
+				format,
+				mimeType,
+				bytes,
+				blob,
+				previewUrl,
+				thumbnailUrl: thumbnail || previewUrl,
+				width: parsed.width,
+				height: parsed.height,
+				frameRate: parsed.frameRate,
+				frameCount: parsed.frameCount,
+			}
+
+			completedResults[index] = res
+			onItemComplete(res)
+			onItemStatus(source.id, { status: "done" })
+			reportProgress(
+				index,
+				1,
+				"encoding",
+				t.messages.fileCompleted,
+				source.name,
+			)
+		} catch (encodeError) {
+			encoder.destroy()
+			reportProgress(
+				index,
+				1,
+				"encoding",
+				t.messages.convertError,
+				source.name,
+				true,
+			)
+			if (isAbortError(encodeError) || signal.aborted) {
+				onItemStatus(source.id, {
+					status: "cancelled",
+					error: t.messages.userCancelled,
+				})
+			} else {
+				const message = getErrorMessage(encodeError)
+				failures.push({ path: source.path, error: message })
+				onItemStatus(source.id, { status: "error", error: message })
+			}
+		}
+	}
 
 	try {
 		for (let index = 0; index < sources.length; index += 1) {
@@ -213,74 +304,16 @@ export async function runConversionPipeline(
 					true,
 				)
 
-				const outputPath = outputPaths[index]
-				const thumbnail = firstFrameThumb
-				const task = (async () => {
-					try {
-						const bytes = await encoder.finish()
-						outputBytes += bytes.byteLength
-						if (outputBytes > LIMITS.maxOutputBytes) {
-							outputLimitReached = true
-							throw new Error(t.messages.errOutputTotalOverflow)
-						}
-						const mimeType = FORMAT_META[format].mimeType
-						const blob = new Blob([bytes as unknown as BlobPart], {
-							type: mimeType,
-						})
-						const previewUrl = URL.createObjectURL(blob)
-						createdUrls.push(previewUrl)
-
-						const res: ConversionResult = {
-							id: source.id,
-							inputPath: source.path,
-							outputPath,
-							name: basename(outputPath),
-							format,
-							mimeType,
-							bytes,
-							blob,
-							previewUrl,
-							thumbnailUrl: thumbnail || previewUrl,
-							width: parsed.width,
-							height: parsed.height,
-							frameRate: parsed.frameRate,
-							frameCount: parsed.frameCount,
-						}
-
-						completedResults[index] = res
-						onItemComplete(res)
-						onItemStatus(source.id, { status: "done" })
-						reportProgress(
-							index,
-							1,
-							"encoding",
-							t.messages.fileCompleted,
-							source.name,
-						)
-					} catch (encodeError) {
-						encoder.destroy()
-						reportProgress(
-							index,
-							1,
-							"encoding",
-							t.messages.convertError,
-							source.name,
-							true,
-						)
-						if (isAbortError(encodeError) || signal.aborted) {
-							onItemStatus(source.id, {
-								status: "cancelled",
-								error: t.messages.userCancelled,
-							})
-						} else {
-							const message = errorMessage(encodeError)
-							failures.push({ path: source.path, error: message })
-							onItemStatus(source.id, { status: "error", error: message })
-						}
-					}
-				})()
-
-				encodingTasks.push(task)
+				encodingTasks.push(
+					finishEncodingTask(
+						index,
+						source,
+						parsed,
+						encoder,
+						outputPaths[index],
+						firstFrameThumb,
+					),
+				)
 			} catch (prepError) {
 				reportProgress(
 					index,
@@ -297,7 +330,7 @@ export async function runConversionPipeline(
 					})
 					break
 				}
-				const message = errorMessage(prepError)
+				const message = getErrorMessage(prepError)
 				failures.push({ path: source.path, error: message })
 				onItemStatus(source.id, { status: "error", error: message })
 			}
@@ -314,27 +347,14 @@ export async function runConversionPipeline(
 
 	let archive: BatchArchive | null = null
 	if (!signal.aborted && sources.length > 1 && completed.length > 0) {
-		onProgress({
-			phase: "packaging",
-			percent: 97,
-			message: t.messages.generatingZip,
-		})
-		try {
-			const bytes = await createResultArchive(completed, failures)
-			const blob = new Blob([bytes as unknown as BlobPart], {
-				type: "application/zip",
-			})
-			const url = URL.createObjectURL(blob)
-			createdUrls.push(url)
-			archive = {
-				name: `converted-${format}.zip`,
-				blob,
-				url,
-				size: bytes.byteLength,
-			}
-		} catch {
-			// ZIP generation failure is non-fatal to individual results
-		}
+		archive = await buildBatchArchive(
+			completed,
+			failures,
+			format,
+			t,
+			onProgress,
+		)
+		if (archive) createdUrls.push(archive.url)
 	}
 
 	return { completed, archive, failures, createdUrls }

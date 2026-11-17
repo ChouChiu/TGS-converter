@@ -1,5 +1,5 @@
-import { FileImage, Film, Loader2, XCircle } from "lucide-react"
-import { memo, useMemo, useState } from "react"
+import { FileImage, Film, Loader2, X, XCircle } from "lucide-react"
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { formatBytes, formatElapsedTime } from "@/shared/lib/files"
 import { formatString, useI18n } from "@/shared/lib/i18n"
 import { cn } from "@/shared/lib/utils"
@@ -230,6 +230,15 @@ export function ResultsGallery({
 	const [copiedId, setCopiedId] = useState<string | null>(null)
 	const [copyFailedId, setCopyFailedId] = useState<string | null>(null)
 	const [playAll, setPlayAll] = useState(false)
+	const copyTimerRef = useRef<number | null>(null)
+
+	useEffect(() => {
+		return () => {
+			if (copyTimerRef.current !== null) {
+				window.clearTimeout(copyTimerRef.current)
+			}
+		}
+	}, [])
 
 	const hasResults = results.length > 0
 
@@ -239,47 +248,64 @@ export function ResultsGallery({
 		return results.filter((res) => res.name.toLowerCase().includes(query))
 	}, [results, searchQuery])
 
-	const copyImageToClipboard = async (result: ConversionResult) => {
-		try {
-			if (!navigator.clipboard?.write) {
+	const scheduleCopyReset = useCallback((delayMs: number) => {
+		if (copyTimerRef.current !== null) {
+			window.clearTimeout(copyTimerRef.current)
+		}
+		copyTimerRef.current = window.setTimeout(() => {
+			setCopiedId(null)
+			setCopyFailedId(null)
+			copyTimerRef.current = null
+		}, delayMs)
+	}, [])
+
+	const copyImageToClipboard = useCallback(
+		async (result: ConversionResult) => {
+			const markFailed = () => {
+				setCopiedId(null)
 				setCopyFailedId(result.id)
-				setTimeout(() => setCopyFailedId(null), 2000)
-				return
+				scheduleCopyReset(2000)
 			}
-			let pngBlob: Blob
-			if (result.mimeType === "image/png") {
-				pngBlob = result.blob
-			} else {
-				const img = new Image()
-				img.src = result.thumbnailUrl || result.previewUrl
-				await img.decode()
-				const canvas = document.createElement("canvas")
-				canvas.width = img.naturalWidth || img.width
-				canvas.height = img.naturalHeight || img.height
-				const ctx = canvas.getContext("2d")
-				if (!ctx) {
-					setCopyFailedId(result.id)
-					setTimeout(() => setCopyFailedId(null), 2000)
+			try {
+				if (!navigator.clipboard?.write) {
+					markFailed()
 					return
 				}
-				ctx.drawImage(img, 0, 0)
-				pngBlob = await new Promise<Blob>((resolve, reject) => {
-					canvas.toBlob((b) => {
-						if (b) resolve(b)
-						else reject(new Error("Canvas toBlob failed"))
-					}, "image/png")
-				})
+				let pngBlob: Blob
+				if (result.mimeType === "image/png") {
+					pngBlob = result.blob
+				} else {
+					const img = new Image()
+					img.src = result.thumbnailUrl || result.previewUrl
+					await img.decode()
+					const canvas = document.createElement("canvas")
+					canvas.width = img.naturalWidth || img.width
+					canvas.height = img.naturalHeight || img.height
+					const ctx = canvas.getContext("2d")
+					if (!ctx) {
+						markFailed()
+						return
+					}
+					ctx.drawImage(img, 0, 0)
+					pngBlob = await new Promise<Blob>((resolve, reject) => {
+						canvas.toBlob((b) => {
+							if (b) resolve(b)
+							else reject(new Error("Canvas toBlob failed"))
+						}, "image/png")
+					})
+				}
+				await navigator.clipboard.write([
+					new ClipboardItem({ "image/png": pngBlob }),
+				])
+				setCopyFailedId(null)
+				setCopiedId(result.id)
+				scheduleCopyReset(1800)
+			} catch {
+				markFailed()
 			}
-			await navigator.clipboard.write([
-				new ClipboardItem({ "image/png": pngBlob }),
-			])
-			setCopiedId(result.id)
-			setTimeout(() => setCopiedId(null), 1800)
-		} catch {
-			setCopyFailedId(result.id)
-			setTimeout(() => setCopyFailedId(null), 2000)
-		}
-	}
+		},
+		[scheduleCopyReset],
+	)
 
 	const emptyTitle = running
 		? t.results.empty.runningTitle
@@ -382,15 +408,25 @@ export function ResultsGallery({
 							<SearchIcon
 								animateOnHover
 								size={12}
-								className="absolute top-2 left-2 text-muted-foreground"
+								className="pointer-events-none absolute top-2 left-2 text-muted-foreground"
 							/>
 							<Input
 								type="text"
 								value={searchQuery}
 								onChange={(e) => setSearchQuery(e.target.value)}
 								placeholder={t.results.completed.searchPlaceholder}
-								className="h-7 w-36 pr-2 pl-7 text-xs border-border/80 focus-visible:ring-primary/40"
+								className="h-7 w-40 pr-6 pl-7 text-xs border-border/80 focus-visible:ring-primary/40"
 							/>
+							{searchQuery && (
+								<button
+									type="button"
+									onClick={() => setSearchQuery("")}
+									aria-label="Clear search"
+									className="absolute top-1.5 right-1.5 rounded p-0.5 text-muted-foreground hover:text-foreground transition-colors"
+								>
+									<X className="size-3" />
+								</button>
+							)}
 						</div>
 					)}
 				</div>

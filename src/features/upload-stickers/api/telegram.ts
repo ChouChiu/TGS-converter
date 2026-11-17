@@ -1,5 +1,6 @@
 import { LIMITS } from "@/shared/config/limits"
 import { sanitizeArchivePath } from "@/shared/lib/files"
+import { createAbortError, isAbortError } from "@/shared/lib/utils"
 import type { ConversionSource } from "@/shared/model/types"
 
 export interface TelegramSticker {
@@ -87,7 +88,7 @@ export function parseStickerSetName(input: string): string {
 }
 
 function handleFetchError(error: unknown): never {
-	if (error instanceof DOMException && error.name === "AbortError") {
+	if (isAbortError(error)) {
 		throw error
 	}
 	if (
@@ -336,25 +337,19 @@ export async function fetchTelegramStickerSources(
 
 	let nextIndex = 0
 	const workerCount = Math.min(concurrency, totalCount)
-	let workerError: unknown = null
 
 	async function worker(): Promise<void> {
-		while (nextIndex < totalCount && !signal?.aborted && !workerError) {
+		while (nextIndex < totalCount && !signal?.aborted) {
 			const currentIndex = nextIndex
 			nextIndex += 1
-			try {
-				await downloadOne(currentIndex)
-			} catch (err) {
-				workerError = err
-				throw err
-			}
+			await downloadOne(currentIndex)
 		}
 	}
 
 	await Promise.all(Array.from({ length: workerCount }, () => worker()))
 
 	if (signal?.aborted) {
-		throw new DOMException("Operation aborted", "AbortError")
+		throw createAbortError("Operation aborted")
 	}
 
 	return sources.filter((s): s is ConversionSource => s !== null)

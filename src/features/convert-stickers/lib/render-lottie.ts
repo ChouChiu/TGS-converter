@@ -1,4 +1,5 @@
 import type { AnimationItem } from "lottie-web"
+import { createAbortError } from "@/shared/lib/utils"
 import type { ParsedTgs } from "@/shared/model/types"
 
 function frameDuration(index: number, frameRate: number): number {
@@ -32,7 +33,7 @@ function waitUntilReady(
 	signal: AbortSignal,
 ): Promise<void> {
 	if (signal.aborted) {
-		return Promise.reject(new DOMException("转换已取消", "AbortError"))
+		return Promise.reject(createAbortError())
 	}
 	if ((animation as { isLoaded?: boolean }).isLoaded) {
 		return Promise.resolve()
@@ -54,7 +55,7 @@ function waitUntilReady(
 		}
 		const onAbort = () => {
 			cleanup()
-			reject(new DOMException("转换已取消", "AbortError"))
+			reject(createAbortError())
 		}
 		const timeoutId = setTimeout(() => {
 			cleanup()
@@ -110,7 +111,7 @@ export async function renderLottieFrames(
 		let timeSliceStartedAt = performance.now()
 
 		for (let index = 0; index < parsed.frameCount; index += 1) {
-			if (signal.aborted) throw new DOMException("转换已取消", "AbortError")
+			if (signal.aborted) throw createAbortError()
 			animation.goToAndStop(index, true)
 
 			const image = context.getImageData(0, 0, parsed.width, parsed.height)

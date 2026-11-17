@@ -88,17 +88,39 @@ function post(message: EncoderResponse, transfer: Transferable[] = []): void {
 	self.postMessage(message, transfer)
 }
 
+function createThrottledProgress(sessionId: number, scale = 1) {
+	let lastProgressAt = 0
+	return (completed: number, total: number) => {
+		const now = performance.now()
+		if (completed === total || now - lastProgressAt >= 50) {
+			lastProgressAt = now
+			post({
+				type: "progress",
+				id: sessionId,
+				progress: (completed / total) * scale,
+			})
+		}
+	}
+}
+
+function packFrameBuffers(
+	targetFrames: FrameData[],
+	bytesPerFrame: number,
+): Uint8Array {
+	const sample = new Uint8Array(targetFrames.length * bytesPerFrame)
+	let offset = 0
+	for (const frame of targetFrames) {
+		sample.set(new Uint8Array(frame.buffer), offset)
+		offset += frame.buffer.byteLength
+	}
+	return sample
+}
+
 function gifPaletteSample(): Uint8Array {
 	const pixelsPerFrame = width * height
-	const totalPixels = frames.length * pixelsPerFrame
-	if (totalPixels <= MAX_GIF_PALETTE_SAMPLE_PIXELS) {
-		const sample = new Uint8Array(totalPixels * 4)
-		let offset = 0
-		for (const frame of frames) {
-			sample.set(new Uint8Array(frame.buffer), offset)
-			offset += frame.buffer.byteLength
-		}
-		return sample
+	const bytesPerFrame = pixelsPerFrame * 4
+	if (frames.length * pixelsPerFrame <= MAX_GIF_PALETTE_SAMPLE_PIXELS) {
+		return packFrameBuffers(frames, bytesPerFrame)
 	}
 
 	const maxFrames = Math.max(
@@ -107,18 +129,14 @@ function gifPaletteSample(): Uint8Array {
 	)
 	const step = Math.max(1, Math.floor(frames.length / maxFrames))
 	const sampledFrames: FrameData[] = []
-	for (let i = 0; i < frames.length; i += step) {
+	for (
+		let i = 0;
+		i < frames.length && sampledFrames.length < maxFrames;
+		i += step
+	) {
 		sampledFrames.push(frames[i])
-		if (sampledFrames.length >= maxFrames) break
 	}
-
-	const sample = new Uint8Array(sampledFrames.length * pixelsPerFrame * 4)
-	let offset = 0
-	for (const frame of sampledFrames) {
-		sample.set(new Uint8Array(frame.buffer), offset)
-		offset += frame.buffer.byteLength
-	}
-	return sample
+	return packFrameBuffers(sampledFrames, bytesPerFrame)
 }
 
 async function encodeGif(sessionId: number): Promise<Uint8Array> {
@@ -131,12 +149,16 @@ async function encodeGif(sessionId: number): Promise<Uint8Array> {
 		clearAlphaThreshold: GIF_ALPHA_THRESHOLD,
 	})
 	const transparentIndex = palette.findIndex((color) => (color[3] ?? 255) === 0)
-	let lastProgressAt = 0
+	const reportProgress = createThrottledProgress(sessionId)
+
 	for (let index = 0; index < frames.length; index += 1) {
 		if (sessionId !== currentSessionId) throw new Error("编码已取消")
 		const frame = frames[index]
-		const rgba = new Uint8Array(frame.buffer)
-		const indexed = applyPalette(rgba, palette, "rgba4444")
+		const indexed = applyPalette(
+			new Uint8Array(frame.buffer),
+			palette,
+			"rgba4444",
+		)
 		gif.writeFrame(indexed, width, height, {
 			palette: index === 0 ? palette : undefined,
 			delay: frame.duration,
@@ -145,15 +167,7 @@ async function encodeGif(sessionId: number): Promise<Uint8Array> {
 			transparentIndex: Math.max(0, transparentIndex),
 			dispose: transparentIndex >= 0 ? 3 : 1,
 		})
-		const now = performance.now()
-		if (index + 1 === frames.length || now - lastProgressAt >= 50) {
-			lastProgressAt = now
-			post({
-				type: "progress",
-				id: sessionId,
-				progress: (index + 1) / frames.length,
-			})
-		}
+		reportProgress(index + 1, frames.length)
 	}
 	gif.finish()
 	return gif.bytes()
@@ -177,7 +191,7 @@ async function encodeWebp(sessionId: number): Promise<Uint8Array> {
 	const frameVector = new module.VectorWebPAnimationFrame()
 	try {
 		const config = { lossless: 0, quality: 75 }
-		let lastProgressAt = 0
+		const reportProgress = createThrottledProgress(sessionId, 0.9)
 		for (let index = 0; index < frames.length; index += 1) {
 			if (sessionId !== currentSessionId) throw new Error("编码已取消")
 			const frame = frames[index]
@@ -187,15 +201,7 @@ async function encodeWebp(sessionId: number): Promise<Uint8Array> {
 				config,
 				has_config: true,
 			})
-			const now = performance.now()
-			if (index + 1 === frames.length || now - lastProgressAt >= 50) {
-				lastProgressAt = now
-				post({
-					type: "progress",
-					id: sessionId,
-					progress: ((index + 1) / frames.length) * 0.9,
-				})
-			}
+			reportProgress(index + 1, frames.length)
 		}
 		if (sessionId !== currentSessionId) throw new Error("编码已取消")
 		const output = module.encodeAnimation(width, height, true, frameVector)
@@ -245,45 +251,44 @@ self.addEventListener("unhandledrejection", (event) => {
 
 self.onmessage = (event: MessageEvent<EncoderRequest>) => {
 	const message = event.data
-	if (message.type === "init") {
-		currentSessionId = message.id
-		format = message.format
-		width = message.width
-		height = message.height
-		frameCount = message.frameCount
-		frames = []
-		if (format === "webp") void getWasmWebpModule()
-		else if (format === "gif") void getGifenc()
-		else if (format === "apng") void getUpng()
-		post({ type: "ready", id: currentSessionId })
-		return
-	}
-	if (message.type === "abort") {
-		if (message.id === currentSessionId) {
+	switch (message.type) {
+		case "init":
+			currentSessionId = message.id
+			format = message.format
+			width = message.width
+			height = message.height
+			frameCount = message.frameCount
 			frames = []
-		}
-		return
-	}
-	if (message.type === "frame") {
-		if (message.id === currentSessionId) {
-			frames.push({
-				index: message.index,
-				duration: message.duration,
-				buffer: message.buffer,
-			})
-		}
-		return
-	}
-	if (message.type === "finish") {
-		if (message.id !== currentSessionId) return
-		finish(message.id).catch((error: unknown) => {
+			if (format === "webp") void getWasmWebpModule()
+			else if (format === "gif") void getGifenc()
+			else if (format === "apng") void getUpng()
+			post({ type: "ready", id: currentSessionId })
+			break
+		case "abort":
 			if (message.id === currentSessionId) {
-				post({
-					type: "error",
-					id: message.id,
-					message: error instanceof Error ? error.message : "未知编码错误",
+				frames = []
+			}
+			break
+		case "frame":
+			if (message.id === currentSessionId) {
+				frames.push({
+					index: message.index,
+					duration: message.duration,
+					buffer: message.buffer,
 				})
 			}
-		})
+			break
+		case "finish":
+			if (message.id !== currentSessionId) return
+			finish(message.id).catch((error: unknown) => {
+				if (message.id === currentSessionId) {
+					post({
+						type: "error",
+						id: message.id,
+						message: error instanceof Error ? error.message : "未知编码错误",
+					})
+				}
+			})
+			break
 	}
 }
